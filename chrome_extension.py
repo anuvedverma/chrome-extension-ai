@@ -1,398 +1,374 @@
-import sys
 import json
 from wit import Wit
 
 
-# Workflow
-# 1 - define "extract commands" function
-# 2 - define function to extract relevant data for each command type (in order of execution)
-# 3     - return dict object for just that command
-# 4 - combine them into single object
-# 5 - jsonify object and return
+class ChromeExtensionAI:
+    """
+    The logic/AI object for translating natural language commands
+    into an actionable response
+    """
 
-# Define command entities
-command_new_window = 'command_new_window'
-command_new_tab = 'command_new_tab'
-command_go_to_website = 'command_go_to_website'
-command_search = 'command_search'
-command_bookmark_page = 'command_bookmark_page'
-command_open_downloads = 'command_open_downloads'
-command_clear_browsing_data = 'command_clear_browsing_data'
-command_check_email = 'command_check_email'
+    # Define command entities
+    CMD_NEW_WINDOW = 'command_new_window'
+    CMD_NEW_TAB = 'command_new_tab'
+    CMD_GO_TO_WEBSITE = 'command_go_to_website'
+    CMD_SEARCH = 'command_search'
+    CMD_BOOKMARK_PAGE = 'command_bookmark_page'
+    CMD_OPEN_DOWNLOADS = 'command_open_downloads'
+    CMD_CLEAR_BROWSING_DATA = 'command_clear_browsing_data'
+    CMD_CHECK_EMAIL = 'command_check_email'
 
-# Define infer-able param entities
-bookmark_name = 'bookmark_name'
-browsing_data_type = 'browsing_data_type'
-url = 'url'
+    # Define infer-able param entities
+    BOOKMARK_NAME = 'bookmark_name'
+    BROWSING_DATA_TYPE = 'browsing_data_type'
+    URL = 'url'
 
-# Define remaining param entities
-number = 'number'
-message_body = 'message_body'
-duration = 'duration'
+    # Define remaining param entities
+    NUMBER = 'number'
+    MESSAGE_BODY = 'message_body'
+    DURATION = 'duration'
 
-entities_list = [
-    command_new_window,
-    command_new_tab,
-    command_go_to_website,
-    command_search,
-    command_bookmark_page,
-    command_open_downloads,
-    command_clear_browsing_data,
-    command_check_email,
-    bookmark_name,
-    browsing_data_type,
-    url
-]
+    entities_list = [
+        CMD_NEW_WINDOW,
+        CMD_NEW_TAB,
+        CMD_GO_TO_WEBSITE,
+        CMD_SEARCH,
+        CMD_BOOKMARK_PAGE,
+        CMD_OPEN_DOWNLOADS,
+        CMD_CLEAR_BROWSING_DATA,
+        CMD_CHECK_EMAIL,
+        BOOKMARK_NAME,
+        BROWSING_DATA_TYPE,
+        URL
+    ]
 
-pop_sites_map = {
-    'gmail': 'www.gmail.com',
-    'facebook': 'www.facebook.com',
-    'twitter': 'www.twitter.com',
-    'linkedin': 'www.linkedin.com',
-    'amazon': 'www.amazon.com',
-    'wikipedia': 'www.wikipedia.com',
-    'youtube': 'www.youtube.com',
-    'google': 'www.google.com',
-    'reddit': 'www.reddit.com',
-    'yahoo': 'www.yahoo.com',
-    'msn': 'www.msn.com',
-    'hotmail': 'www.hotmail.com',
-    'outlook': 'www.outlook.com'
-}
+    pop_sites_map = {
+        'gmail': 'www.gmail.com',
+        'facebook': 'www.facebook.com',
+        'twitter': 'www.twitter.com',
+        'linkedin': 'www.linkedin.com',
+        'amazon': 'www.amazon.com',
+        'wikipedia': 'www.wikipedia.com',
+        'youtube': 'www.youtube.com',
+        'google': 'www.google.com',
+        'reddit': 'www.reddit.com',
+        'yahoo': 'www.yahoo.com',
+        'msn': 'www.msn.com',
+        'hotmail': 'www.hotmail.com',
+        'outlook': 'www.outlook.com'
+    }
 
-# Map entities to actions
-# action_map = {'command_new_window': 'new_window',
-#               'command_new_tab': 'new_tab',
-#               'command_go_to_website': 'go_to_website',
-#               'bookmark_name': 'bookmark_page',
-#               'command_search': 'search',
-#               'command_bookmark_page': 'bookmark_page',
-#               'command_open_downloads': 'open_downloads',
-#               'browsing_data_type': 'clear_browsing_data',
-#               'command_clear_browsing_data': 'clear_browsing_data',
-#               'command_check_email': 'check_email',
-#               'url': 'go_to_website'}
-#
-# action_map2 = {'new_tab': ['command_new_tab'],
-#               'new_window': ['command_new_window'],
-#               'go_to_website': ['command_go_to_website', 'url'],
-#               'check_email': ['command_check_email'],
-#               'open_downloads': ['command_open_downloads'],
-#               'search': ['command_search'],
-#               'bookmark_page': ['command_bookmark_page', 'bookmark_name'],
-#               'clear_browsing_data': ['command_clear_browsing_data', 'browsing_data_type']
-#               }
+    def __init__(self):
+        # Connect to Wit API
+        self.wit_client = Wit(access_token=self.__get_access_token())
 
-# Initialize list of actions to execute
-actions = []
+        # Initialize list of actions to execute
+        self.actions = []
 
+    def get_response(self, input_text):
+        return self.__get_response(input_text, self.wit_client)
 
-def get_access_token():
-    f = open(".config", "r")
-    token = f.readline()
-    return token
+    @staticmethod
+    def __get_access_token():
+        f = open(".config", "r")
+        token = f.readline()
+        return token
 
+    def __get_response(self, input_text, wit_client):
+        self.__extract_commands(wit_client, input_text)
+        json_data = json.dumps(self.actions)
+        self.actions = []
+        return json_data
 
-def extract_commands(client, message):
-    wit_resp = client.message(message)
-    print(wit_resp)
-    print('\n')
+    def __extract_commands(self, client, message):
+        wit_resp = client.message(message)
 
-    entities = list(wit_resp['entities'])
+        entities = list(wit_resp['entities'])
 
-    # Execute according to command entities
-    if command_new_tab in entities:
-        extract_new_tab(wit_resp)
+        # Execute according to command entities
+        if ChromeExtensionAI.CMD_NEW_TAB in entities:
+            self.__extract_new_tab(wit_resp)
 
-    if command_new_window in entities:
-        extract_new_window(wit_resp)
+        if ChromeExtensionAI.CMD_NEW_WINDOW in entities:
+            self.__extract_new_window(wit_resp)
 
-    if command_go_to_website in entities or url in entities:
-        extract_go_to_website(wit_resp)
+        if ChromeExtensionAI.CMD_GO_TO_WEBSITE in entities or ChromeExtensionAI.URL in entities:
+            self.__extract_go_to_website(wit_resp)
 
-    if command_check_email in entities:
-        extract_check_email(wit_resp)
+        if ChromeExtensionAI.CMD_CHECK_EMAIL in entities:
+            self.__extract_check_email(wit_resp)
 
-    if command_open_downloads in entities:
-        extract_open_downloads(wit_resp)
+        if ChromeExtensionAI.CMD_OPEN_DOWNLOADS in entities:
+            self.__extract_open_downloads(wit_resp)
 
-    if command_search in entities:
-        extract_search(wit_resp)
+        if ChromeExtensionAI.CMD_SEARCH in entities:
+            self.__extract_search(wit_resp)
 
-    if command_bookmark_page in entities or bookmark_name in entities:
-        extract_bookmark_page(wit_resp)
+        if ChromeExtensionAI.CMD_BOOKMARK_PAGE in entities or ChromeExtensionAI.BOOKMARK_NAME in entities:
+            self.__extract_bookmark_page(wit_resp)
 
-    if command_clear_browsing_data in entities or browsing_data_type in entities:
-        extract_clear_browsing_data(wit_resp)
+        if ChromeExtensionAI.CMD_CLEAR_BROWSING_DATA in entities or ChromeExtensionAI.BROWSING_DATA_TYPE in entities:
+            self.__extract_clear_browsing_data(wit_resp)
 
+        return self.actions
 
-def extract_new_tab(wit_resp):
-    new_tab_entities = wit_resp['entities'][command_new_tab]
+    def __extract_new_tab(self, wit_resp):
+        new_tab_entities = wit_resp['entities'][ChromeExtensionAI.CMD_NEW_TAB]
 
-    for entity in new_tab_entities:
-        data = {'action': 'new_tab'}
-        try:
-            data['num_tabs'] = entity['entities']['number'][0]['value']
-        except:
-            data['num_tabs'] = 1
-        actions.append(data)
+        for entity in new_tab_entities:
+            data = {'action': 'new_tab'}
+            try:
+                data['num_tabs'] = entity['entities'][ChromeExtensionAI.NUMBER][0]['value']
+            except:
+                data['num_tabs'] = 1
 
+            self.actions.append(data)
 
-def extract_new_window(wit_resp):
-    sentence = wit_resp['_text']
-    print(sentence)
-    incognito = ['incognito', 'private', 'hidden', 'anonymous']
-
-    new_window_entities = wit_resp['entities'][command_new_window]
-
-    for entity in new_window_entities:
-        data = {'action': 'new_window'}
-        try:
-            data['num_windows'] = entity['entities']['number'][0]['value']
-        except:
-            data['num_windows'] = 1
-
-        if set(incognito).isdisjoint(sentence.lower().split(' ')):
-            data['incognito'] = False
-        else:
-            data['incognito'] = True
-        actions.append(data)
-
-
-def extract_go_to_website(wit_resp):
-    # if command-go-to-website...
-    go_to_website_entities = None
-    url_entities = None
-    bookmark_entities = None
-
-    try:
-        go_to_website_entities = wit_resp['entities'][command_go_to_website]
-    except:
-        pass
-
-    try:
-        url_entities = wit_resp['entities'][url]
-    except:
-        pass
-
-    try:
-        bookmark_entities = wit_resp['entities'][command_bookmark_page]
-    except:
-        pass
-
-    try:
-        bookmark_entities += wit_resp['entities'][bookmark_name]
-    except:
-        pass
-
-    if go_to_website_entities is not None:
+    def __extract_new_window(self, wit_resp):
         sentence = wit_resp['_text']
-        for entity in go_to_website_entities:
-            data = {'action': 'go_to_website'}
+        print(sentence)
+        incognito = ['incognito', 'private', 'hidden', 'anonymous']
+
+        new_window_entities = wit_resp['entities'][ChromeExtensionAI.CMD_NEW_WINDOW]
+
+        for entity in new_window_entities:
+            data = {'action': 'new_window'}
             try:
-                sub_url = entity['entities'][url][0]['value']
-                data['url'] = sub_url
+                data['num_windows'] = entity['entities'][ChromeExtensionAI.NUMBER][0]['value']
             except:
-                if url_entities is not None:
-                    sub_url = url_entities['entities'][url][0]['value']
-                    data['url'] = sub_url
-                elif not set(sentence.lower().split(' ')).isdisjoint(set(pop_sites_map.keys())):
-                    site_name = set(sentence.lower().split(' ')).intersection(set(pop_sites_map.keys())).pop()
-                    data['url'] = pop_sites_map[site_name]
-                else:
-                    data['missing_param'] = True
-                    data['error_message'] = 'Please include a valid website you would like to visit'
-            actions.append(data)
+                data['num_windows'] = 1
 
-    # if url but no bookmark...
-    elif url_entities is not None and bookmark_entities is None:
-        for entity in url_entities:
-            data = {'action': 'go_to_website',
-                    'url': entity['value']
-                    }
-            actions.append(data)
+            if set(incognito).isdisjoint(sentence.lower().split(' ')):
+                data['incognito'] = False
+            else:
+                data['incognito'] = True
 
-    # if url and bookmark... (save processing for bookmark)
-    else:
-        pass
+            self.actions.append(data)
 
+    def __extract_go_to_website(self, wit_resp):
+        # if command-go-to-website...
+        go_to_website_entities = None
+        url_entities = None
+        bookmark_entities = None
 
-def extract_check_email(wit_resp):
-    sentence = wit_resp['_text']
-    data = {'action': 'go_to_website'}
-    sites = set(sentence.lower().split(' ')).intersection(pop_sites_map.keys())
-    if len(sites) != 0:
-        data['url'] = pop_sites_map[sites.pop()]
-    else:
-        data['url'] = 'www.gmail.com'
-    actions.append(data)
-
-
-def extract_open_downloads(wit_resp):
-    data = {'action': 'open_downloads'}
-    actions.append(data)
-
-
-def extract_search(wit_resp):
-    search_entities = wit_resp['entities'][command_search]
-    search_query = None
-
-    for entity in search_entities:
-        data = {'action': 'search'}
         try:
-            search_query = entity['entities']['message_body'][0]['value']
-        except:
-            try:
-                search_query = wit_resp['entities']['message_body'][0]['value']
-            except:
-                pass
-
-        if search_query is not None:
-            data['query'] = search_query
-        else:
-            data['query'] = ''
-        actions.append(data)
-
-
-def extract_bookmark_page(wit_resp):
-    bookmark_entities = None
-    bookmark_name_entities = None
-
-    try:
-        bookmark_entities = wit_resp['entities'][command_bookmark_page]
-    except:
-        pass
-
-    try:
-        bookmark_name_entities = wit_resp['entities'][bookmark_name]
-    except:
-        try:
-            bookmark_name_entities = wit_resp['entities']['message_body']
+            go_to_website_entities = wit_resp['entities'][ChromeExtensionAI.CMD_GO_TO_WEBSITE]
         except:
             pass
 
-    # if bookmark-entities is not None
-    if bookmark_entities is not None:
-        for entity in bookmark_entities:
-            data = {'action': 'bookmark'}
+        try:
+            url_entities = wit_resp['entities'][ChromeExtensionAI.URL]
+        except:
+            pass
 
-            # handle bookmark name
+        try:
+            bookmark_entities = wit_resp['entities'][ChromeExtensionAI.CMD_BOOKMARK_PAGE]
+        except:
+            pass
+
+        try:
+            bookmark_entities += wit_resp['entities'][ChromeExtensionAI.BOOKMARK_NAME]
+        except:
+            pass
+
+        if go_to_website_entities is not None:
+            sentence = wit_resp['_text']
+            for entity in go_to_website_entities:
+                data = {'action': 'go_to_website'}
+                try:
+                    sub_url = entity['entities'][ChromeExtensionAI.URL][0]['value']
+                    data['url'] = sub_url
+                except:
+                    if url_entities is not None:
+                        sub_url = url_entities['entities'][ChromeExtensionAI.URL][0]['value']
+                        data['url'] = sub_url
+                    elif not set(sentence.lower().split(' ')).isdisjoint(set(ChromeExtensionAI.pop_sites_map.keys())):
+                        site_name = set(sentence.lower().split(' ')).intersection(set(ChromeExtensionAI.pop_sites_map.keys())).pop()
+                        data['url'] = ChromeExtensionAI.pop_sites_map[site_name]
+                    else:
+                        data['missing_param'] = True
+                        data['error_message'] = 'Please include a valid website you would like to visit'
+                self.actions.append(data)
+
+        # if url but no bookmark...
+        elif url_entities is not None and bookmark_entities is None:
+            for entity in url_entities:
+                data = {'action': 'go_to_website',
+                        'url': entity['value']
+                        }
+                self.actions.append(data)
+
+        # if url and bookmark... (save processing for bookmark)
+        else:
+            pass
+
+    def __extract_check_email(self, wit_resp):
+        sentence = wit_resp['_text']
+        data = {'action': 'go_to_website'}
+        sites = set(sentence.lower().split(' ')).intersection(ChromeExtensionAI.pop_sites_map.keys())
+        if len(sites) != 0:
+            data['url'] = ChromeExtensionAI.pop_sites_map[sites.pop()]
+        else:
+            data['url'] = 'www.gmail.com'
+
+        self.actions.append(data)
+
+    def __extract_open_downloads(self, wit_resp):
+        data = {'action': 'open_downloads'}
+        self.actions.append(data)
+
+    def __extract_search(self, wit_resp):
+        search_entities = wit_resp['entities'][ChromeExtensionAI.CMD_SEARCH]
+        search_query = None
+
+        for entity in search_entities:
+            data = {'action': 'search'}
             try:
-                name_bookmark = entity['entities'][bookmark_name][0]['value']
+                search_query = entity['entities'][ChromeExtensionAI.MESSAGE_BODY][0]['value']
             except:
                 try:
-                    name_bookmark = entity['entities']['message_body'][0]['value']
+                    search_query = wit_resp['entities'][ChromeExtensionAI.MESSAGE_BODY][0]['value']
+                except:
+                    pass
+
+            if search_query is not None:
+                data['query'] = search_query
+            else:
+                data['query'] = ''
+
+            self.actions.append(data)
+
+    def __extract_bookmark_page(self, wit_resp):
+        bookmark_entities = None
+        bookmark_name_entities = None
+
+        try:
+            bookmark_entities = wit_resp['entities'][ChromeExtensionAI.CMD_BOOKMARK_PAGE]
+        except:
+            pass
+
+        try:
+            bookmark_name_entities = wit_resp['entities'][ChromeExtensionAI.BOOKMARK_NAME]
+        except:
+            try:
+                bookmark_name_entities = wit_resp['entities'][ChromeExtensionAI.MESSAGE_BODY]
+            except:
+                pass
+
+        # if bookmark-entities is not None
+        if bookmark_entities is not None:
+            for entity in bookmark_entities:
+                data = {'action': 'bookmark'}
+
+                # handle bookmark name
+                try:
+                    name_bookmark = entity['entities'][ChromeExtensionAI.BOOKMARK_NAME][0]['value']
                 except:
                     try:
-                        name_bookmark = wit_resp['entities']['message_body'][0]['value']
+                        name_bookmark = entity['entities']['message_body'][0]['value']
                     except:
-                        name_bookmark = ''
-            data['bookmark_name'] = name_bookmark
+                        try:
+                            name_bookmark = wit_resp['entities']['message_body'][0]['value']
+                        except:
+                            name_bookmark = ''
+                data['bookmark_name'] = name_bookmark
 
-            # handle bookmark url
-            try:
-                bookmark_url = entity['entities'][url][0]['value']
-            except:
+                # handle bookmark url
                 try:
-                    bookmark_url = wit_resp['entities'][url][0]['value']
+                    bookmark_url = entity['entities'][ChromeExtensionAI.URL][0]['value']
                 except:
-                    bookmark_url = 'CURRENT PAGE'
-            data['url'] = bookmark_url
-            actions.append(data)
-    elif bookmark_name_entities is not None:
-        for entity in bookmark_name_entities:
-            data = {'action': 'bookmark'}
+                    try:
+                        bookmark_url = wit_resp['entities'][ChromeExtensionAI.URL][0]['value']
+                    except:
+                        bookmark_url = 'CURRENT PAGE'
+                data['url'] = bookmark_url
+                self.actions.append(data)
 
-            # handle bookmark name
-            try:
-                name_bookmark = entity['entities'][bookmark_name][0]['value']
-            except:
-                name_bookmark = ''
-            data['bookmark_name'] = name_bookmark
+        elif bookmark_name_entities is not None:
+            for entity in bookmark_name_entities:
+                data = {'action': 'bookmark'}
 
-            # handle bookmark url
-            try:
-                bookmark_url = entity['entities'][url][0]['value']
-            except:
+                # handle bookmark name
                 try:
-                    bookmark_url = wit_resp['entities'][url][0]['value']
+                    name_bookmark = entity['entities'][ChromeExtensionAI.BOOKMARK_NAME][0]['value']
                 except:
-                    bookmark_url = 'CURRENT PAGE'
-            data['url'] = bookmark_url
-            actions.append(data)
+                    name_bookmark = ''
+                data['bookmark_name'] = name_bookmark
 
+                # handle bookmark url
+                try:
+                    bookmark_url = entity['entities'][ChromeExtensionAI.URL][0]['value']
+                except:
+                    try:
+                        bookmark_url = wit_resp['entities'][ChromeExtensionAI.URL][0]['value']
+                    except:
+                        bookmark_url = 'CURRENT PAGE'
 
-def extract_clear_browsing_data(wit_resp):
-    clear_browsing_entities = None
-    browsing_data_entities = None
+                data['url'] = bookmark_url
+                self.actions.append(data)
 
-    try:
-        clear_browsing_entities = wit_resp['entities'][command_clear_browsing_data]
-    except:
-        pass
+    def __extract_clear_browsing_data(self, wit_resp):
+        clear_browsing_entities = None
+        browsing_data_entities = None
 
-    try:
-        browsing_data_entities = wit_resp['entities'][browsing_data_type]
-    except:
-        pass
+        try:
+            clear_browsing_entities = wit_resp['entities'][ChromeExtensionAI.CMD_CLEAR_BROWSING_DATA]
+        except:
+            pass
 
-    # if clear-browsing-entities is not None
-    if clear_browsing_entities is not None:
-        for entity in clear_browsing_entities:
+        try:
+            browsing_data_entities = wit_resp['entities'][ChromeExtensionAI.BROWSING_DATA_TYPE]
+        except:
+            pass
+
+        # if clear-browsing-entities is not None
+        if clear_browsing_entities is not None:
+            for entity in clear_browsing_entities:
+                data = {'action': 'clear_browsing_data'}
+
+                # handle browsing data type
+                try:
+                    data_type = entity['entities'][ChromeExtensionAI.BROWSING_DATA_TYPE][0]['value']
+                except:
+                    try:
+                        data_type = wit_resp['entities'][ChromeExtensionAI.BROWSING_DATA_TYPE][0]['value']
+                    except:
+                        data_type = 'all'
+                data['browsing_data_type'] = data_type
+
+                # handle time duration
+                try:
+                    duration = entity['entities'][ChromeExtensionAI.DURATION][0]['value']
+                    unit = entity['entities'][ChromeExtensionAI.DURATION][0]['unit']
+                except:
+                    try:
+                        duration = wit_resp['entities'][ChromeExtensionAI.DURATION][0]['value']
+                        unit = wit_resp['entities'][ChromeExtensionAI.DURATION][0]['unit']
+                    except:
+                        duration = 'all'
+                        unit = 'None'
+                data['duration'] = duration
+                data['unit'] = unit
+                self.actions.append(data)
+
+        elif browsing_data_entities is not None:
             data = {'action': 'clear_browsing_data'}
 
             # handle browsing data type
             try:
-                data_type = entity['entities'][browsing_data_type][0]['value']
+                data_type = wit_resp['entities'][ChromeExtensionAI.BROWSING_DATA_TYPE][0]['value']
             except:
-                try:
-                    data_type = wit_resp['entities'][browsing_data_type][0]['value']
-                except:
-                    data_type = 'all'
+                data_type = 'all'
             data['browsing_data_type'] = data_type
 
             # handle time duration
             try:
-                duration = entity['entities']['duration'][0]['value']
-                unit = entity['entities']['duration'][0]['unit']
+                duration = wit_resp['entities'][ChromeExtensionAI.DURATION][0]['value']
+                unit = wit_resp['entities'][ChromeExtensionAI.DURATION][0]['unit']
             except:
-                try:
-                    duration = wit_resp['entities']['duration'][0]['value']
-                    unit = wit_resp['entities']['duration'][0]['unit']
-                except:
-                    duration = 'all'
-                    unit = 'None'
+                duration = 'all'
+                unit = 'None'
+
             data['duration'] = duration
             data['unit'] = unit
-            actions.append(data)
-    elif browsing_data_entities is not None:
-        data = {'action': 'clear_browsing_data'}
-
-        # handle browsing data type
-        try:
-            data_type = wit_resp['entities'][browsing_data_type][0]['value']
-        except:
-            data_type = 'all'
-        data['browsing_data_type'] = data_type
-
-        # handle time duration
-        try:
-            duration = wit_resp['entities']['duration'][0]['value']
-            unit = wit_resp['entities']['duration'][0]['unit']
-        except:
-            duration = 'all'
-            unit = 'None'
-        data['duration'] = duration
-        data['unit'] = unit
-        actions.append(data)
-
-
-wit_client = Wit(access_token=get_access_token())
-message = ""
-while message != 'exit':
-    message = raw_input('Enter command: ')
-    # message = "increase the fan speed"
-    extract_commands(wit_client, message)
-    json_data = json.dumps(actions)
-    actions = []
-    print(json_data)
+            self.actions.append(data)
