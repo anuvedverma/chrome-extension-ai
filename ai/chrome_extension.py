@@ -70,7 +70,7 @@ class ChromeExtensionAI:
 
     @staticmethod
     def __get_access_token():
-        f = open(".config", "r")
+        f = open("ai/.config", "r")
         token = f.readline()
         return token
 
